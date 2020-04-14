@@ -2,7 +2,7 @@ ruleset gossip {
     meta {
         use module io.picolabs.subscription alias Subscriptions
         use module io.picolabs.wrangler alias wrangler
-        use module temperature_store
+        use module shop
 
         shares __testing, getRumors, createSeenMessage, getPeers
         provides getRumors, createSeenMessage, getPeers
