@@ -82,12 +82,19 @@ ruleset shop {
 
         if (ent:threshold.defaultsTo(0) <= ent:driver_rankings.defaultsTo({}){driver_id}) then
         event:send({
-            "eci": event:attr("return_eci"),
+            "eci": subscription{"Tx"},
             "eid": "selected-driver",
             "domain": "delivery_driver",
             "type": "selected",
             "attrs": {
-                "selected_eci": event:attr("return_eci")
+                "MessageId": meta:picoId + ":" + ent:sequence_number.defaultsTo(0),
+                "SequenceNumber": ent:sequence_number.defaultsTo(0),
+                "Delivery": {
+                    "Shop_ECI": subscription{"Rx"},
+                    "Latitude": latitude,
+                    "Longitude": longitude,
+                    "Status": "claimed"
+                }
             }
         })
     }
