@@ -62,8 +62,8 @@ ruleset shop {
         event:send({
             "eci": subscription{"Tx"},
             "eid": "request-delivery",
-            "domain": "delivery",
-            "type": "available",
+            "domain": "gossip",
+            "type": "rumor",
             "attrs": {
                 "MessageId": meta:picoId + ":" + ent:sequence_number.defaultsTo(0),
                 "SequenceNumber": ent:sequence_number.defaultsTo(0),
