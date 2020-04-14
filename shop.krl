@@ -10,6 +10,7 @@ ruleset shop {
     global {
         latitude = 0
         longitude = 0
+
         driver_rankings = function() {
             ent:driver_rankings.defaultsTo({})
         }
@@ -34,6 +35,14 @@ ruleset shop {
                     "Authorization": "Bearer " + access_token
                 }
             )
+        }
+
+        __testing = { 	"queries": [
+        ],
+        "events": [ 
+                    { "domain": "delivery", "type": "start", "attrs": [] },
+                    { "domain": "shop", "type": "subscription_wanted", "attrs": ["eci"] }
+                ] 
         }
     }
 
@@ -125,7 +134,7 @@ ruleset shop {
     }
 
     rule add_driver_subscription {
-        select when gossip subscription_wanted
+        select when shop subscription_wanted
 
         always {
 			raise wrangler event "subscription" attributes {
