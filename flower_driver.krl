@@ -6,7 +6,7 @@ ruleset flower_driver {
 
     shares share_gossip, process_rumor, compare_notes, change_lat_long, request_payment
     use module io.picolabs.subscription alias Subs
-    
+
     use module google_maps_key
     use module google_maps
         with maps_api_key = keys:google_maps{"maps_api_key"}
@@ -14,14 +14,11 @@ ruleset flower_driver {
 
 
 //  data in rumor: correlation id, sequence number, delivery object
-//  data in delivery object: shop ECI, lat, long, status
+//  data in delivery object: shop ECI, lat, long, status (available or claimed)
 
 // Shop-Driver interface details:
-// format(+name) of available delivery and driver selected events
-//    available delivery needs to include lat+long of flower shop
-// how they want to receive the delivery claim event, also delivery completed event
 // shop needs to initially notify of a delivery's existence with event structured as a rumor (so that we get their sequence number)
-// 
+//
 
   global {
   }
@@ -77,7 +74,7 @@ ruleset flower_driver {
       // get the data from the message
       originId = rumor{"MessageID"}.substr(0, 25)
     }
-    
+
     // if this rumor is one we haven't seen before, it's available, and it's close enough, try to claim it
     if (not originId >< ent:rumors || not rumor{"SequenceNumber"} >< ent:rumors{originId})
         && rumor{"Delivery"}{"Status"} == "available"
@@ -86,16 +83,16 @@ ruleset flower_driver {
       event:send({
         "eci": rumor{"Delivery"}{"Shop_ECI"},
         "domain": "delivery",
-        "type": "claim",
+        "type": "claimed",
         "attrs": {
-          // TODO what attributes does the shop need?
+          "driver_id": meta:picoId
         }
       })
 
     always {
       // record the rumor in our entity variable
       ent:rumors := ent:rumors.put([originId, rumor{"SequenceNumber"}], rumor)
-      
+
       // maybe update our last_seen entry
       ent:last_seen{originId} := ent:rumors{originId}
             .keys()
@@ -121,33 +118,34 @@ ruleset flower_driver {
         }
       })
   }
-  
+
   rule change_lat_long {
     select when delivery lat_long_update
-    
+
     pre {
       lat = event:attrs{"lat"}.as("Number")
       long = event:attrs{"long"}.as("Number")
     }
-    
+
     always {
       ent:latitude := lat
       ent:longitude := long
     }
   }
-  
+
   rule request_payment {
     select when delivery completed
-    
+
     pre {
       delivery = event:attrs{"Delivery"}
     }
-    
+
     event:send({    // TODO what does the shop ruleset want in this event?
       "eci": delivery{"Shop_ECI"},
       "domain": "delivery",
-      "type": "completed",
+      "type": "delivered",
       "attrs": {
+        "driver_id": meta:picoId,
         "paypal_id": ent:paypal_id
       }
     })
