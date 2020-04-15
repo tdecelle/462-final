@@ -26,13 +26,18 @@ ruleset flower_driver {
       {"name": "getRumors", "args":[]}
     ],
     "events": [ 
-                { "domain": "delivery", "type": "completed", "attrs": [ "delivery" ] },
+                { "domain": "delivery", "type": "completed", "attrs": [ "Delivery" ] },
+                { "domain": "driver_gossip H", "type": "heartbeat", "attrs": [] },
                 { "domain": "shop", "type": "subscription_wanted", "attrs": ["eci"] }
             ] 
     }
 
     getRumors = function() {
       ent:rumors
+    }
+
+    getDeliveries = function() {
+      ent:deliveries.defaultsTo({})
     }
   }
 
@@ -46,36 +51,36 @@ ruleset flower_driver {
       ent:longitude := -148.459178
       ent:paypal_id := 42
       ent:distance_threshold := 900
-      schedule gossip event "heartbeat" at time:add(time:now(), {"seconds": 1})
+      schedule driver_gossip event "heartbeat" at time:add(time:now(), {"seconds": 1})
     }
   }
 
   rule share_gossip {
-    select when gossip heartbeat
+    select when driver_gossip heartbeat
 
     pre {
       // get a peer
-      peers = Subs:established("Tx_role", "gossip_node")
+      peers = Subs:established("Tx_role", "gossip_node").klog("Possible Gossipers")
       ind = random:integer(peers.length()-1)
       peer = peers[ind].klog("Selected peer: ")
 
       // prepare a message
       event = {
         "eci": peer{"Tx"},
-        "domain": "gossip",
+        "domain": "driver_gossip",
         "type": "seen",
         "attrs": {
-          "seen": ent:last_seen,
+          "seen": ent:last_seen.klog("LAST SEEN"),
           "returnChannel": peer{"Rx"}
         }
       }
     }
 
-    event:send(evnt)
+    event:send(event)
 
     always {
       // re-schedule the next heartbeat
-      schedule gossip event "heartbeat" at time:add(time:now(), {"seconds": 1})
+      schedule driver_gossip event "heartbeat" at time:add(time:now(), {"seconds": 1})
     }
   }
 
@@ -85,20 +90,21 @@ ruleset flower_driver {
 
     pre {
       // get the data from the message
-      originId = rumor{"MessageID"}.substr(0, 25)
+      originId = rumor{"MessageID"}.klog("MessageID for rumor").substr(0, 25)
     }
 
     // if this rumor is one we haven't seen before, it's available, and it's close enough, try to claim it
-    if (not originId >< ent:rumors || not rumor{"SequenceNumber"} >< ent:rumors{originId})
-        && rumor{"Delivery"}{"Status"} == "available"
-        && maps.distance(ent:lat, ent:long, rumor{"Delivery"}{"Latitude"}, rumor{"Delivery"}{"Longitude"}) < ent:distance_threshold
+    if (ent:rumors.keys().none(function(x) {x == originId}) || ent:rumors{originId}.keys().klog("SequenceNumbers").none(function(x) {x == rumor{"SequenceNumber"}})).klog("IsUnique")
+        && (rumor{"Delivery"}{"Status"} == "available").klog("IsAvailable")
+        && (google_maps:distance(ent:lat, ent:long, rumor{"Delivery"}{"Latitude"}, rumor{"Delivery"}{"Longitude"}).klog("Distance Calculation") < ent:distance_threshold).klog("IsWithinDistance")
         then
       event:send({
         "eci": rumor{"Delivery"}{"Shop_ECI"},
         "domain": "delivery",
         "type": "claimed",
         "attrs": {
-          "driver_id": meta:picoId
+          "driver_id": meta:picoId,
+          "rumor": rumor
         }
       })
 
@@ -117,11 +123,11 @@ ruleset flower_driver {
   }
 
   rule compare_notes {
-    select when gossip seen
+    select when driver_gossip seen
       foreach ent:rumors setting (rumors, originId)
         foreach rumors setting (rumor, sequenceNumber)
 
-    if (not event:attrs{"seen"} >< originId) || event:attrs{"seen"}{originId} < sequenceNumber then
+    if (event:attrs{"seen"}.none(function(x) {originId == x}) || event:attrs{"seen"}{originId} < sequenceNumber) then
       event:send({
         "eci": event:attrs{"returnChannel"},
         "domain": "gossip",
@@ -150,11 +156,11 @@ ruleset flower_driver {
     select when delivery completed
 
     pre {
-      delivery = event:attrs{"Delivery"}
+      delivery = event:attrs{"Delivery"}.klog("Completed Delivery")
     }
 
-    event:send({    // TODO what does the shop ruleset want in this event?
-      "eci": delivery{"Shop_ECI"},
+    event:send({
+      "eci": delivery,
       "domain": "delivery",
       "type": "delivered",
       "attrs": {
@@ -176,5 +182,14 @@ ruleset flower_driver {
       }
     }
   }
+
+  rule auto_accept {
+	  select when wrangler inbound_pending_subscription_added
+	  fired {
+	  	Tx_role = event:attr("wellKnown_Tx").klog("wellKnown_Tx")
+		raise wrangler event "pending_subscription_approval"
+		  attributes event:attrs
+	  }
+	}
 
 }

@@ -36,7 +36,7 @@ ruleset gossip {
         }
 
         hasNewRumor = function() {
-            temps = shop:driver_rankings()
+            temps = shop:driver_rankings().klog("Driver Rankings")
             my_nums = ent:rumors.defaultsTo({})
 
             my_nums = my_nums{meta:picoId}.defaultsTo({}).keys()
@@ -53,7 +53,7 @@ ruleset gossip {
             return {
                 "MessageID": getMessageID().klog("createRumorMessage-MessageID"),
                 "SensorID": meta:picoId,
-                "Temperature": act_temp,
+                "Rankings": temps,
                 "Timestamp": time,
             }
         }
@@ -263,4 +263,13 @@ ruleset gossip {
             ent:process := event:attr("process")
         }
     }
+
+    rule auto_accept {
+        select when wrangler inbound_pending_subscription_added
+        fired {
+            Tx_role = event:attr("wellKnown_Tx").klog("wellKnown_Tx")
+          raise wrangler event "pending_subscription_approval"
+            attributes event:attrs
+        }
+      }
 }

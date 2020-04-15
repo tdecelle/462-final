@@ -2,6 +2,7 @@ ruleset google_maps {
   meta {
     configure using maps_api_key = ""
     provides distance
+    shares distance
   }
  
   global {

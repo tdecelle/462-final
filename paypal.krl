@@ -2,6 +2,7 @@ ruleset paypal {
     meta {
       configure using access_token = ""
       provides send_payment
+      shares send_payment
     }
    
     global {
