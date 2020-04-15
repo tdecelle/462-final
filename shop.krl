@@ -1,10 +1,14 @@
 ruleset shop {
     meta {
-        use module io.picolabs.twilio_v2 alias twilio
-			with access_token =  keys:paypal{"account_token"}
-                 
         provides driver_rankings
-        shares driver_rankings
+        shares driver_rankings, __testing
+
+        use module io.picolabs.subscription alias Subscriptions
+        use module io.picolabs.wrangler alias wrangler
+
+        use module shop_keys
+        use module paypal
+            with access_token = keys:paypal{"access_token"}
     }
 
     global {
@@ -15,30 +19,7 @@ ruleset shop {
             ent:driver_rankings.defaultsTo({})
         }
 
-        send_payment = function(receiver_id) {
-            base_url = <<https://api.sandbox.paypal.com/v1/payments/payouts/>>
-
-            http:post(base_url, json = {
-                    "items": [
-                        {
-                            "recipient_type": "PAYPAL_ID",
-                            "amount": {
-                                "value": "5.00",
-                                "currency": "USD"
-                            },
-                            "sender_item_id": ent:paypal_item_id.defaultsTo(0),
-                            "receiver": receiver_id
-                        }
-                    ]
-                },
-                headers = {
-                    "Authorization": "Bearer " + access_token
-                }
-            )
-        }
-
-        __testing = { 	"queries": [
-        ],
+        __testing = { 	"queries": [],
         "events": [ 
                     { "domain": "delivery", "type": "start", "attrs": [] },
                     { "domain": "shop", "type": "subscription_wanted", "attrs": ["eci"] }
@@ -57,7 +38,7 @@ ruleset shop {
 
     rule start_delivery_request {
         select when delivery start
-        foreach Subscriptions:established("Tx_role", "driver") setting (subscription)
+        foreach Subscriptions:established("Tx_role", "driver").klog("delivery subs") setting (subscription)
 
         event:send({
             "eci": subscription{"Tx"},
@@ -127,7 +108,7 @@ ruleset shop {
             raise driver_ranking event "updated"
                 attributes event:attrs
 
-            _ = send_payment(paypal_id)
+            _ = paypal:send_payment(paypal_id, ent:paypal_item_id.defaultsTo(0))
 
             ent:paypal_item_id := ent:paypal_item_id.defaultsTo(0) + 1
         }

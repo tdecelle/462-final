@@ -4,8 +4,9 @@ ruleset flower_driver {
     author "Jeremy Rees"
     logging on
 
-    shares share_gossip, process_rumor, compare_notes, change_lat_long, request_payment
+    shares share_gossip, process_rumor, compare_notes, change_lat_long, request_payment, __testing, getRumors
     use module io.picolabs.subscription alias Subs
+    use module io.picolabs.wrangler alias wrangler
 
     use module google_maps_key
     use module google_maps
@@ -21,6 +22,18 @@ ruleset flower_driver {
 //
 
   global {
+    __testing = { 	"queries": [
+      {"name": "getRumors", "args":[]}
+    ],
+    "events": [ 
+                { "domain": "delivery", "type": "completed", "attrs": [ "delivery" ] },
+                { "domain": "shop", "type": "subscription_wanted", "attrs": ["eci"] }
+            ] 
+    }
+
+    getRumors = function() {
+      ent:rumors
+    }
   }
 
   rule init {
@@ -149,6 +162,19 @@ ruleset flower_driver {
         "paypal_id": ent:paypal_id
       }
     })
+  }
+
+  rule add_driver_subscription {
+    select when shop subscription_wanted
+
+    always {
+      raise wrangler event "subscription" attributes {
+        "name": "gossip",
+        "wellKnown_Tx": event:attr("eci"),
+        "Rx_role":"gossip_node",
+        "Tx_role":"gossip_node"
+      }
+    }
   }
 
 }
